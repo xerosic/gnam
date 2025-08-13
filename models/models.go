@@ -4,12 +4,9 @@ import (
 	"time"
 
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 type Request struct {
-	gorm.Model
-
 	// Request line and URL
 	Method      string `gorm:"size:16;index"` // GET, POST, etc.
 	Scheme      string `gorm:"size:8"`        // http, https

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"gnam/middlewares"
 	"gnam/models"
 	"gnam/routes"
 
@@ -24,7 +25,7 @@ func main() {
 
 	db.AutoMigrate(&models.Request{})
 
-	e.Use(middleware.RequestID())
+	e.Pre(middleware.RequestID())
 	e.Use(middleware.Recover())
 	e.Use(middleware.Decompress())
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
@@ -36,6 +37,17 @@ func main() {
 		Timeout:      10 * time.Second,
 	}))
 	e.Use(middleware.Logger())
+
+	e.Use(middlewares.DatabaseInjector(&middlewares.DatabaseConnection{Gorm: db}))
+
+	// Register Web UI and API before the catch-all ingest route
+	e.GET("/ui", routes.ServeIndex)
+	e.GET("/ui/*", routes.ServeIndex)
+	e.Static("/static", "static")
+
+	// APIs
+	e.GET("/api/requests", routes.ApiListRequests)
+	e.GET("/api/requests/:id", routes.ApiGetRequest)
 
 	e.Any("/*", routes.IngestRequest)
 

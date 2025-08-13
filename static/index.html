@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>gnam — Requests</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+    <header>
+        <h1>gnam</h1>
+        <div class="controls">
+            <input id="search" type="text" placeholder="Filter by method, host, path, ip…" />
+            <button id="refresh">Refresh</button>
+        </div>
+    </header>
+
+    <main>
+        <aside>
+            <ul id="list" class="list"></ul>
+        </aside>
+        <section id="detail" class="detail">
+            <div class="empty">Select a request to see details</div>
+        </section>
+    </main>
+
+    <footer>
+        <span id="status">Ready</span>
+    </footer>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>

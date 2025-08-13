@@ -4,18 +4,24 @@ import (
 	"encoding/json"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"gorm.io/gorm"
 
+	"gnam/middlewares"
 	"gnam/models"
 )
 
 func IngestRequest(c echo.Context) error {
-	db := c.Get("__db").(*gorm.DB)
+	db := c.Get("__db").(*middlewares.DatabaseConnection).Gorm
 	req := c.Request()
+
+	// Skip saving UI/API/static requests
+	if strings.HasPrefix(req.URL.Path, "/api/") || strings.HasPrefix(req.URL.Path, "/ui") || strings.HasPrefix(req.URL.Path, "/static/") {
+		return c.NoContent(204)
+	}
 
 	var bodyBytes []byte
 	if req.Body != nil {
@@ -31,6 +37,10 @@ func IngestRequest(c echo.Context) error {
 	reqID := c.Response().Header().Get(echo.HeaderXRequestID)
 	if reqID == "" {
 		reqID = req.Header.Get(echo.HeaderXRequestID)
+	}
+	if reqID == "" {
+		// final fallback to ensure non-empty id
+		reqID = strconv.FormatInt(time.Now().UnixNano(), 10)
 	}
 
 	requestModel := models.Request{
@@ -124,7 +134,7 @@ func IngestRequest(c echo.Context) error {
 
 	return c.JSON(200, map[string]interface{}{
 		"status":     "ok",
-		"request_id": requestModel.ID,
+		"request_id": requestModel.RequestID,
 	})
 }
 
