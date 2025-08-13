@@ -215,18 +215,79 @@ aside {
     border-bottom: 1px solid var(--border)
 }
 
+.head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px
+}
+
+.btn {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.btn.btn-subtle {
+    color: var(--muted);
+    background: transparent;
+}
+
+.sec-toggle {
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    border-radius: 6px;
+    width: 26px;
+    height: 26px;
+    line-height: 24px;
+    text-align: center;
+    cursor: pointer;
+}
+
 .section .content {
     padding: 12px
+}
+
+.section.collapsed .content {
+    display: none
+}
+
+.section.collapsed header {
+    border-bottom: none
 }
 
 .kv {
     display: grid;
     grid-template-columns: 220px 1fr;
-    gap: 8px
+    gap: 10px 12px;
+    /* row gap, column gap */
 }
 
 .kv .k {
-    color: var(--muted)
+    color: var(--muted);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 8px;
+    align-self: start;
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.kv .v {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.kv .v.mono {
+    font-size: 13px;
 }
 
 pre {
@@ -235,6 +296,31 @@ pre {
     border: 1px solid var(--border);
     padding: 10px;
     border-radius: 6px
+}
+
+/* JSON highlighting */
+.code-json {
+    overflow: auto
+}
+
+.tok-key {
+    color: #86cbff;
+}
+
+.tok-string {
+    color: #9dd38d;
+}
+
+.tok-number {
+    color: #f2c17b;
+}
+
+.tok-boolean {
+    color: #f28fad;
+}
+
+.tok-null {
+    color: #c4b5fd;
 }
 
 footer {

@@ -9,9 +9,9 @@ import (
 	"gnam/models"
 	"gnam/routes"
 
+	"github.com/glebarez/sqlite"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 

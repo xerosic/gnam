@@ -5,6 +5,7 @@ const state = {
     items: [],
     filtered: [],
     activeId: null,
+    activeDetail: null,
 };
 
 function formatBytes(n) {
@@ -77,6 +78,7 @@ async function select(id) {
         const ct = res.headers.get('content-type') || '';
         if (!ct.includes('application/json')) { throw new Error('Unexpected response'); }
         const d = await res.json();
+        state.activeDetail = d;
         renderDetail(d);
         setStatus('Ready');
     } catch (err) {
@@ -91,9 +93,9 @@ function renderKV(obj) {
     const entries = Object.entries(obj);
     if (!entries.length) return '<div class="small">—</div>';
     return '<div class="kv">' + entries.map(([k, v]) => `
-    <div class="k small">${escapeHtml(k)}</div>
-    <div class="v mono">${escapeHtml(formatValue(v))}</div>
-  `).join('') + '</div>';
+        <div class="k">${escapeHtml(k)}</div>
+        <div class="v mono">${escapeHtml(formatKVValue(v))}</div>
+    `).join('') + '</div>';
 }
 
 function escapeHtml(s) {
@@ -106,6 +108,20 @@ function formatValue(v) {
     return String(v);
 }
 
+// For key-value tables (headers, cookies, forms), avoid JSON-y brackets for arrays
+function formatKVValue(v) {
+    if (v == null) return '';
+    if (Array.isArray(v)) {
+        // Join multiple values with comma+space for compact display
+        return v.map(x => (x == null ? '' : String(x))).filter(Boolean).join(', ');
+    }
+    if (typeof v === 'object') {
+        // Objects are rare here; fallback to stringified
+        return JSON.stringify(v, null, 2);
+    }
+    return String(v);
+}
+
 function hasData(v) {
     if (v == null) return false;
     if (typeof v === 'string') return v.length > 0;
@@ -114,29 +130,35 @@ function hasData(v) {
     return !!v;
 }
 
-function section(title, content) {
+function section(title, content, actions = '') {
     return `
-  <div class="section">
-    <header><h3>${title}</h3></header>
-    <div class="content">${content}</div>
-  </div>`;
+    <div class="section" data-collapsed="false">
+        <header>
+            <h3>${title}</h3>
+            <div class="head-actions">
+                ${actions}
+                <button class="sec-toggle" aria-expanded="true" title="Collapse section">▾</button>
+            </div>
+        </header>
+        <div class="content">${content}</div>
+    </div>`;
 }
 
 function renderDetail(d) {
     const meta = section('Overview', `
     <div class="kv">
-      <div class="k small">Request ID</div><div class="mono">${escapeHtml(d.request_id)}</div>
-      <div class="k small">Time</div><div>${fmtTime(d.received_at)}</div>
-      <div class="k small">Method</div><div class="mono">${escapeHtml(d.method)}</div>
-      <div class="k small">URL</div><div class="mono">${escapeHtml(d.scheme)}://${escapeHtml(d.host)}${escapeHtml(d.path)}${d.query ? ('?' + escapeHtml(d.query)) : ''}</div>
-      <div class="k small">IP</div><div class="mono">${escapeHtml(d.ip)}</div>
-      <div class="k small">TLS</div><div>${d.tls_enabled ? ('Yes ' + (d.tls_version || '')) : 'No'}</div>
-      <div class="k small">Content-Type</div><div class="mono">${escapeHtml(d.content_type || '')}</div>
-      <div class="k small">Body</div><div>${formatBytes(d.body_size)}</div>
-      <div class="k small">User-Agent</div><div class="mono">${escapeHtml(d.user_agent || '')}</div>
-      <div class="k small">Referer</div><div class="mono">${escapeHtml(d.referer || '')}</div>
-    </div>
-  `);
+    <div class="k">Request ID</div><div class="mono">${escapeHtml(d.request_id)}</div>
+    <div class="k">Time</div><div>${fmtTime(d.received_at)}</div>
+    <div class="k">Method</div><div class="mono">${escapeHtml(d.method)}</div>
+    <div class="k">URL</div><div class="mono">${escapeHtml(d.scheme)}://${escapeHtml(d.host)}${escapeHtml(d.path)}${d.query ? ('?' + escapeHtml(d.query)) : ''}</div>
+    <div class="k">IP</div><div class="mono">${escapeHtml(d.ip)}</div>
+    <div class="k">TLS</div><div>${d.tls_enabled ? ('Yes ' + (d.tls_version || '')) : 'No'}</div>
+    <div class="k">Content-Type</div><div class="mono">${escapeHtml(d.content_type || '')}</div>
+    <div class="k">Body</div><div>${formatBytes(d.body_size)}</div>
+    <div class="k">User-Agent</div><div class="mono">${escapeHtml(d.user_agent || '')}</div>
+    <div class="k">Referer</div><div class="mono">${escapeHtml(d.referer || '')}</div>
+        </div>
+    `, `<button class="btn btn-subtle" data-action="copy-curl">Copy as cURL</button>`);
 
     const sections = [];
     // Always show headers
@@ -151,7 +173,13 @@ function renderDetail(d) {
     const method = (d.method || '').toUpperCase();
     const allowBody = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
     if (allowBody && d.body_size > 0 && d.body_preview) {
-        sections.push(section('Body (preview)', `<pre class="mono">${escapeHtml(d.body_preview || '')}</pre>`));
+        const isLikelyJSON = (d.content_type || '').toLowerCase().includes('json') || /^[\[{]/.test(d.body_preview.trim());
+        if (isLikelyJSON) {
+            const highlighted = highlightJSONSafe(d.body_preview);
+            sections.push(section('Body (JSON)', highlighted, `<button class=\"btn btn-subtle\" data-action=\"copy-json\">Copy JSON</button>`));
+        } else {
+            sections.push(section('Body (preview)', `<pre class="mono">${escapeHtml(d.body_preview || '')}</pre>`));
+        }
     }
 
     $('#detail').innerHTML = meta + sections.join('');
@@ -166,4 +194,113 @@ $('#search').addEventListener('input', () => {
     searchTimer = setTimeout(applyFilter, 150);
 });
 
+// Section toggle and copy actions via delegation
+$('#detail').addEventListener('click', (e) => {
+    const tgl = e.target.closest('.sec-toggle');
+    if (tgl) {
+        const sec = tgl.closest('.section');
+        const collapsed = sec.classList.toggle('collapsed');
+        tgl.setAttribute('aria-expanded', String(!collapsed));
+        tgl.textContent = collapsed ? '▸' : '▾';
+        return;
+    }
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.getAttribute('data-action');
+    if (action === 'copy-curl') {
+        const d = state.activeDetail; if (!d) return;
+        const cmd = buildCurl(d);
+        copyToClipboard(cmd).then(() => setStatus('Copied cURL')).catch(() => setStatus('Copy failed'));
+    } else if (action === 'copy-json') {
+        const d = state.activeDetail; if (!d || !d.body_preview) return;
+        let text = d.body_preview; try { text = JSON.stringify(JSON.parse(text), null, 2) } catch { }
+        copyToClipboard(text).then(() => setStatus('Copied JSON')).catch(() => setStatus('Copy failed'));
+    }
+});
+
 loadList();
+
+// Try to pretty-print and highlight JSON; fallback to escaped text in a <pre>
+function highlightJSONSafe(raw) {
+    try {
+        // If parse fails, we fall through to plain pre
+        const parsed = JSON.parse(raw);
+        const pretty = JSON.stringify(parsed, null, 2);
+        return highlightJSON(pretty);
+    } catch {
+        return `<pre class="mono">${escapeHtml(raw)}</pre>`;
+    }
+}
+
+function highlightJSON(prettyJson) {
+    // Tokenize via regex, escape gaps and tokens separately
+    const rx = /("(?:\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"\s*:)|("(?:\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*")|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?/g;
+    let out = '';
+    let last = 0;
+    let m;
+    while ((m = rx.exec(prettyJson)) !== null) {
+        out += escapeHtml(prettyJson.slice(last, m.index));
+        const match = m[0];
+        const key = m[1];
+        const str = m[2];
+        const boolNull = m[3];
+        let cls;
+        if (key) cls = 'tok-key';
+        else if (str) cls = 'tok-string';
+        else if (boolNull) cls = /true|false/.test(boolNull) ? 'tok-boolean' : 'tok-null';
+        else cls = 'tok-number';
+        out += `<span class="${cls}">${escapeHtml(match)}</span>`;
+        last = m.index + match.length;
+    }
+    out += escapeHtml(prettyJson.slice(last));
+    return `<pre class="mono code-json">${out}</pre>`;
+}
+
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            ok ? resolve() : reject(new Error('execCommand failed'));
+        } catch (e) { reject(e) }
+    });
+}
+
+function shellQuoteSingle(s) {
+    if (s == null) return "''";
+    return `'${String(s).replace(/'/g, `'"'"'`)}'`;
+}
+
+function allowBodyForMethod(m) {
+    const method = (m || '').toUpperCase();
+    return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+}
+
+function shouldSkipHeader(k) {
+    const skip = new Set(['host', 'content-length']);
+    return skip.has(String(k).toLowerCase());
+}
+
+function buildCurl(d) {
+    const url = `${d.scheme}://${d.host}${d.path}${d.query ? ('?' + d.query) : ''}`;
+    const parts = ['curl', '-X', d.method, shellQuoteSingle(url)];
+    const hdr = d.header || {};
+    for (const [k, v] of Object.entries(hdr)) {
+        if (shouldSkipHeader(k)) continue;
+        if (Array.isArray(v)) {
+            for (const vv of v) parts.push('-H', shellQuoteSingle(`${k}: ${vv}`));
+        } else {
+            parts.push('-H', shellQuoteSingle(`${k}: ${v}`));
+        }
+    }
+    if (allowBodyForMethod(d.method) && d.body_size > 0 && d.body_preview) {
+        parts.push('--data-raw', shellQuoteSingle(d.body_preview));
+    }
+    return parts.join(' ');
+}

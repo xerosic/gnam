@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+gnam
 
 # Test binary, built with `go test -c`
 *.test
@@ -37,3 +38,4 @@ Thumbs.db
 
 # Test database
 *.db
+
